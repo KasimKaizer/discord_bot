@@ -1,12 +1,14 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 
 	"github.com/bwmarrin/discordgo"
@@ -54,17 +56,123 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 
-	args := strings.Split(m.Content, " ")
-
-	if args[0] != prefix {
+	if m.Content[:1] != prefix {
 		return
 	}
 
-	if m.Content == "hello" {
-		s.ChannelMessageSend(m.ChannelID, "world")
+	message := m.Content[1:]
+
+	if message == "cat" || message == "dog" || message == "meme" {
+		var url string
+
+		if message == "cat" {
+			url = getCat()
+		}
+
+		if message == "dog" {
+			url = getDog()
+		}
+
+		if message == "meme" {
+			url = getMeme()
+		}
+
+		// TODO:
+		// In future if you want to embed the image, then the code for it is here.
+
+		// imgResp, err := http.Get(url)
+		// if err != nil {
+		// 	log.Fatal(err)
+		// }
+		// defer imgResp.Body.Close()
+
+		// attachment := discordgo.File{
+		// 	Name:   "cute_pet.jpg",
+		// 	Reader: imgResp.Body,
+		// }
+		// s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
+		// 	Files: []*discordgo.File{&attachment},
+		// })
+		s.ChannelMessageSend(m.ChannelID, url)
+
 	}
 
-	if m.Content == "ping" {
+	if message == "ping" {
 		s.ChannelMessageSend(m.ChannelID, "pong")
 	}
+}
+
+func getCat() string {
+	resp, err := http.Get("https://api.thecatapi.com/v1/images/search?size=full")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println(resp)
+	if resp != nil {
+		defer resp.Body.Close()
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	var result []map[string]interface{}
+	err = json.Unmarshal(body, &result)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(result[0]["url"].(string))
+	return result[0]["url"].(string)
+}
+
+func getDog() string {
+	resp, err := http.Get("https://dog.ceo/api/breeds/image/random")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if resp != nil {
+		defer resp.Body.Close()
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatal(err)
+	}
+	var result map[string]interface{}
+
+	err = json.Unmarshal(body, &result)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println(result["message"].(string))
+	return result["message"].(string)
+}
+
+func getMeme() string {
+	resp, err := http.Get("https://meme-api.com/gimme")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if resp != nil {
+		defer resp.Body.Close()
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatal(err)
+	}
+	var result map[string]interface{}
+
+	err = json.Unmarshal(body, &result)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println(result["url"].(string))
+	return result["url"].(string)
 }
