@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/bwmarrin/discordgo"
@@ -15,8 +16,9 @@ import (
 )
 
 var (
-	prefix string
-	token  string
+	prefix   string
+	token    string
+	nightApi string
 )
 
 func init() {
@@ -28,6 +30,8 @@ func init() {
 	log.Println("env loaded successfully")
 	prefix = os.Getenv("PREFIX")
 	token = os.Getenv("BOT_TOKEN")
+	nightApi = os.Getenv("NIGHT_API")
+
 }
 
 func main() {
@@ -60,23 +64,11 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	if m.Content[:1] != prefix {
 		return
 	}
+	message := strings.Split(m.Content[1:], " ")
 
-	message := m.Content[1:]
+	if message[0] == "pet" {
 
-	if message == "cat" || message == "dog" || message == "meme" {
-		var url string
-
-		if message == "cat" {
-			url = getCat()
-		}
-
-		if message == "dog" {
-			url = getDog()
-		}
-
-		if message == "meme" {
-			url = getMeme()
-		}
+		url := getPet(strings.ToLower(message[1]))
 
 		// TODO:
 		// In future if you want to embed the image, then the code for it is here.
@@ -94,86 +86,56 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		// s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
 		// 	Files: []*discordgo.File{&attachment},
 		// })
-		s.ChannelMessageSend(m.ChannelID, url)
 
+		if url == "" {
+			s.ChannelMessageSend(m.ChannelID, "Invalid command / Some error occurred")
+		} else {
+			s.ChannelMessageSend(m.ChannelID, url)
+		}
 	}
 
-	if message == "ping" {
+	if message[0] == "ping" {
 		s.ChannelMessageSend(m.ChannelID, "pong")
 	}
 }
 
-func getCat() string {
-	resp, err := http.Get("https://api.thecatapi.com/v1/images/search?size=full")
+func getPet(pet string) string {
+
+	client := &http.Client{}
+
+	req, err := http.NewRequest("GET", fmt.Sprintf("https://api.night-api.com/images/animals/%s", pet), nil)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	fmt.Println(resp)
-	if resp != nil {
-		defer resp.Body.Close()
+	req.Header.Set("authorization", nightApi)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Fatal(err)
 	}
+
+	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	var result []map[string]interface{}
-	err = json.Unmarshal(body, &result)
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Println(result[0]["url"].(string))
-	return result[0]["url"].(string)
-}
+	var jsonResponse map[string]interface{}
 
-func getDog() string {
-	resp, err := http.Get("https://dog.ceo/api/breeds/image/random")
+	err = json.Unmarshal(body, &jsonResponse)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	if resp != nil {
-		defer resp.Body.Close()
+	// We are taking the easy way out here.
+	// TODO: to something better here to detect and handle error
+	if jsonResponse["status"].(float64) != 200 {
+		return ""
 	}
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		log.Fatal(err)
-	}
-	var result map[string]interface{}
+	content := jsonResponse["content"].(map[string]interface{})
 
-	err = json.Unmarshal(body, &result)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	fmt.Println(result["message"].(string))
-	return result["message"].(string)
-}
-
-func getMeme() string {
-	resp, err := http.Get("https://meme-api.com/gimme")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	if resp != nil {
-		defer resp.Body.Close()
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		log.Fatal(err)
-	}
-	var result map[string]interface{}
-
-	err = json.Unmarshal(body, &result)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	fmt.Println(result["url"].(string))
-	return result["url"].(string)
+	return content["url"].(string)
 }
