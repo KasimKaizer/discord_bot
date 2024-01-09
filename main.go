@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -12,31 +11,33 @@ import (
 	"syscall"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/joho/godotenv"
 )
 
-const prefix string = ">"
-
-// Variables used for command line parameters
 var (
-	Token string
+	prefix string
+	token  string
 )
 
 func init() {
+	err := godotenv.Load(".env")
+	if err != nil {
+		log.Fatal("error while loading the env file", err)
+	}
 
-	flag.StringVar(&Token, "t", "", "Bot Token")
-	flag.Parse()
+	log.Println("env loaded successfully")
+	prefix = os.Getenv("PREFIX")
+	token = os.Getenv("BOT_TOKEN")
 }
 
 func main() {
-	ds, err := discordgo.New("Bot " + Token)
+	ds, err := discordgo.New("Bot " + token)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// Register the messageCreate func as a callback for MessageCreate events.
 	ds.AddHandler(messageCreate)
 
-	// In this example, we only care about receiving message events.
 	ds.Identify.Intents = discordgo.IntentsGuildMessages
 
 	err = ds.Open()
